@@ -1,33 +1,33 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    // Example stuff:
-    label: String,
+#[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+enum SelectedLabel {
+    First,
+    Second,
+    Third,
+}
 
-    // this how you opt-out of serialization of a member
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct TemplateApp {
+    selected_label: SelectedLabel,
     #[serde(skip)]
-    value: f32,
+    wallpaper: egui_extras::RetainedImage,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            selected_label: SelectedLabel::First,
+            wallpaper: egui_extras::RetainedImage::from_image_bytes(
+                "../assets/wallpaper.png",
+                include_bytes!("../assets/wallpaper.png"),
+            )
+            .unwrap(),
         }
     }
 }
 
 impl TemplateApp {
-    /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
@@ -37,80 +37,85 @@ impl TemplateApp {
 }
 
 impl eframe::App for TemplateApp {
-    /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
-    /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let Self { label, value } = self;
+        let Self {
+            selected_label: _,
+            wallpaper: _,
+        } = self;
 
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+        egui::Area::new("wallpaper")
+            .order(egui::Order::Background)
+            .show(ctx, |ui| {
+                /*let wallpaper = egui_extras::RetainedImage::from_image_bytes(
+                    "../assets/wallpaper.png",
+                    include_bytes!("../assets/wallpaper.png"),
+                );*/
+                ui.add(egui::Image::new(
+                    self.wallpaper.texture_id(ctx),
+                    ctx.screen_rect().size(),
+                ));
+            });
 
-        #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        _frame.close();
+        egui::Window::new("Select Bar")
+            .anchor(egui::Align2::LEFT_BOTTOM, [10.0, -10.0])
+            .fixed_size([250.0, ctx.screen_rect().height() / 1.3])
+            .movable(false)
+            .resizable(false)
+            .title_bar(false)
+            .open(&mut true)
+            .show(ctx, |ui| {
+                ui.vertical_centered_justified(|ui| {
+                    if ui
+                        .add_sized(
+                            [ui.available_width(), ui.available_height() / 8.0],
+                            egui::SelectableLabel::new(
+                                self.selected_label == SelectedLabel::First,
+                                "About Me!",
+                            ),
+                        )
+                        .clicked()
+                    {
+                        self.selected_label = SelectedLabel::First;
+                    }
+                    if ui
+                        .add_sized(
+                            [ui.available_width(), ui.available_height() / 8.0],
+                            egui::SelectableLabel::new(
+                                self.selected_label == SelectedLabel::Second,
+                                "Skills!",
+                            ),
+                        )
+                        .clicked()
+                    {
+                        self.selected_label = SelectedLabel::Second;
                     }
                 });
-            });
-        });
-
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(label);
-            });
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                *value += 1.0;
-            }
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.label("powered by ");
-                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to(
-                        "eframe",
-                        "https://github.com/emilk/egui/tree/master/crates/eframe",
-                    );
-                    ui.label(".");
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    ui.label("Powered by egui and NovaAI with ♥");
+                    ui.separator();
                 });
             });
-        });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-
-            ui.heading("eframe template");
-            ui.hyperlink("https://github.com/emilk/eframe_template");
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
-            egui::warn_if_debug_build(ui);
-        });
-
-        if false {
-            egui::Window::new("Window").show(ctx, |ui| {
-                ui.label("Windows can be moved by dragging them.");
-                ui.label("They are automatically sized based on contents.");
-                ui.label("You can turn on resizing and scrolling if you like.");
-                ui.label("You would normally choose either panels OR windows.");
+        egui::Window::new("Window")
+            .anchor(egui::Align2::RIGHT_BOTTOM, [-10.0, -10.0])
+            .fixed_size([
+                ctx.screen_rect().width() - 310.0,
+                ctx.screen_rect().height() / 1.3,
+            ])
+            .movable(false)
+            .resizable(false)
+            .title_bar(false)
+            .open(&mut true)
+            .show(ctx, |ui| {
+                if self.selected_label == SelectedLabel::First {
+                    ui.add_sized(ui.available_size(), egui::Label::new("test"));
+                } else if self.selected_label == SelectedLabel::Second {
+                    ui.add_sized(ui.available_size(), egui::Label::new("test 2"));
+                }
             });
-        }
     }
 }
